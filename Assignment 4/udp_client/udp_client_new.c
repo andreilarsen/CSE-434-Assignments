@@ -251,7 +251,7 @@ int main(int argc, char* argv[])
     // Same for the receive buffer.
     struct header *ph_send = (struct header *)send_buffer;
     struct header *ph_recv = (struct header *)recv_buffer;
-
+    
     while (1)
     {
         // Use select to wait on keyboard input or socket receiving.

@@ -143,8 +143,8 @@ client* check_id_password(char* user_id, char* password)
     for(int i = 0; i < client_count; i++)
     {
         client* current_client = client_array + i;
-        if(strncmp(current_client->client_id, user_id, strlen(current_client->client_id)) == 0
-           && strncmp(current_client->password, password, strlen(current_client->password) - 1) == 0)   // Don't include the '\n'
+        if(strcmp(current_client->client_id, user_id) == 0
+           && strcmp(current_client->password, password) == 0)   // Don't include the '\n'
             return current_client;
     }
 
@@ -240,7 +240,7 @@ int main(int argc, char* argv[])
     // Read the clients from the file
     get_clients_from_file();
 
-    // Init the random seed
+    // Init the random seed for the token
     srand((unsigned) time(NULL));
 
     while (1)
@@ -507,6 +507,7 @@ int main(int argc, char* argv[])
                 {
                     ph_send->opcode = OPCODE_FAILED_UNSUBSCRIBE_ACK;
                 }
+                
             }
             else    // Current client doesn't exist or isn't online
             {
@@ -548,6 +549,7 @@ int main(int argc, char* argv[])
                 // Prepare to send the END_OF_RETRIEVE_ACK
                 ph_send->opcode = OPCODE_END_OF_RETRIEVE_ACK;
                 ph_send->payload_len = 0;
+                
             }
             else    // Current client doesn't exist or isn't online
             {
@@ -606,7 +608,6 @@ int main(int argc, char* argv[])
         else  // if (event == EVENT_NET_INVALID)
         {
             // Reset the connection
-            // The server need to reply a msg anyway
             ph_send->magic1 = MAGIC_1;
             ph_send->magic2 = MAGIC_2;
             ph_send->opcode = OPCODE_SESSION_RESET;
@@ -620,14 +621,39 @@ int main(int argc, char* argv[])
 
             sendto(sockfd, send_buffer, h_size, 0, (struct sockaddr *) &cli_addr, sizeof(cli_addr));
         }
-        
 
+        printf("Checking timeouts...\n");
         time_t current_time = time(NULL);
 
-        // Now you may check the time of clients, i.e., scan all sessions. 
-        // For each session, if the current time has passed 5 minutes plus 
-        // the last time of the session, the session expires.
-        // TODO: check session liveliness
+        for(int i = 0; i < client_count; i++)
+        {
+            client* temp_client = client_array + i;
+            if(temp_client != NULL && temp_client->state != STATE_OFFLINE)
+            {
+                int diff = difftime(current_time, temp_client->last_time);
+                printf("Client %s time:%d\n", temp_client->client_id, diff);
+                if(diff > 60)
+                {
+                    printf("Resetting connection.\n");
+
+                    // Reset the connection
+                    ph_send->magic1 = MAGIC_1;
+                    ph_send->magic2 = MAGIC_2;
+                    ph_send->opcode = OPCODE_SESSION_RESET;
+                    ph_send->payload_len = 0;
+                    ph_send->msg_id = 0;
+
+                    sendto(sockfd, send_buffer, h_size, 0, (struct sockaddr *) &(temp_client->client_addr), sizeof(cli_addr));
+
+                    temp_client->state = STATE_OFFLINE;
+                }
+                else
+                {
+                    printf("Connection intact.\n");
+                }
+                
+            }
+        }
 
     } // This is the end of the while loop
 
